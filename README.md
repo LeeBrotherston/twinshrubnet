@@ -8,7 +8,7 @@ Here's an example:
 
 ```golang
     // initialize the tree using type string as the value stored for this subnet
-	myTree := twinshrubnet.NewTree[string]()
+    myTree := twinshrubnet.NewTree[string]()
 
     // insert a new subnet into the lookup tree
     _, err := myTree.AddNet("15.197.148.33/18", "I am a lookup value")
@@ -24,3 +24,5 @@ Here's an example:
 
     fmt.Printf("The result is: %s\n", someResult.value)
 ```
+
+With overlapping subnets, the most specific is returned.  e.g. a `/30` which is within a `/24` both being stored as subnets... a search for an address inside the `/30` would return the `/30` not the `/24` as this is the most specific subnet.
