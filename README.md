@@ -1,2 +1,26 @@
-# Binary Tree Subnet Search
-## ... a twin shrubnet search :)
+# Binary Tree Subnet Search ... a twin shrubnet search, in GO :)
+
+Looking up an IP from a list is easy, looking up if an IP in within a subnet is easy. Having a list of subnets and finding which one the IP address belongs to is less easy. This is a simple binary tree search package which makes this pretty easy as subnet masking lends itself really nicely to binary tree search.
+
+twinshrubnet uses generics in order to allow user supplied types to be used as values in the loopup and so GO version `1.18` or above is required.
+
+Here's an example:
+
+```golang
+    // initialize the tree using type string as the value stored for this subnet
+	myTree := twinshrubnet.NewTree[string]()
+
+    // insert a new subnet into the lookup tree
+    _, err := myTree.AddNet("15.197.148.33/18", "I am a lookup value")
+    if err != nil {
+        // handle error
+    }
+
+    // Lookup a single IP in that subnet
+    someResult, err := myTree.FindNetFromIP("15.197.148.34")
+    if err != nil {
+        // handle error
+    }
+
+    fmt.Printf("The result is: %s\n", someResult.value)
+```
