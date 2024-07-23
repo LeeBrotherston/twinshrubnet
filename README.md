@@ -22,7 +22,7 @@ Here's an example:
         // handle error
     }
 
-    fmt.Printf("The result is: %s\n", someResult.value)
+    fmt.Printf("The result is: %s\n", someResult)
 ```
 
 With overlapping subnets, the most specific is returned.  e.g. a `/30` which is within a `/24` both being stored as subnets... a search for an address inside the `/30` would return the `/30` not the `/24` as this is the most specific subnet.
