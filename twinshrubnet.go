@@ -10,18 +10,20 @@ import (
 
 type UserSuppliedType[T any] any
 
-// Binary tree struct
+// TreeNode is a node in the binary search tree
 type TreeNode[T any] struct {
 	binZero *TreeNode[T]
 	binOne  *TreeNode[T]
 	Value   UserSuppliedType[T]
 }
 
+// TreeRoot is the root of the binary search tree
 type TreeRoot[T any] struct {
 	ipv4 *TreeNode[T]
 	ipv6 *TreeNode[T]
 }
 
+// NewTree returns the root of a new twinshrubnet tree
 func NewTree[T any]() *TreeRoot[T] {
 	return &TreeRoot[T]{
 		ipv4: &TreeNode[T]{},
@@ -45,7 +47,6 @@ func (t *TreeRoot[T]) AddNet(cidr string, userdata T) (*TreeNode[T], error) {
 		location = t.ipv4
 		v4Uint32 := binary.BigEndian.Uint32(ipnet.IP)
 
-		//bitmask := uint32(1)
 		for i := uint32(1); i <= uint32(maskOnes); i++ {
 			thing := v4bit(v4Uint32, i)
 			if thing == 0 {
@@ -90,90 +91,96 @@ func (t *TreeRoot[T]) AddNet(cidr string, userdata T) (*TreeNode[T], error) {
 	return location, nil
 }
 
-func (t *TreeRoot[T]) FindNetFromIP(ipStr string) (UserSuppliedType[T], error) {
+func (t *TreeRoot[T]) GetFromIPStr(ipStr string) (UserSuppliedType[T], *net.IPNet, error) {
 	var (
 		ipaddr net.IP
-		subnet *net.IPNet
 		err    error
 	)
 	ipaddr = net.ParseIP(ipStr)
 	if ipaddr == nil {
 		log.Printf("could not parse IP address=[%s], attempting to parse as CIDR\n", ipaddr)
-		ipaddr, subnet, err = net.ParseCIDR(ipStr)
+		ipaddr, _, err = net.ParseCIDR(ipStr)
 		if err != nil {
-			return nil, fmt.Errorf("could not parse IP address=[%s] as IP or CIDR, err=[%s]", ipStr, err)
-		} else {
-			ones, bits := subnet.Mask.Size()
-			if ones == bits {
-				log.Printf("CIDR parsed as single host subnet, using IP=[%s]\n", ipaddr.String())
-			} else {
-				log.Printf("Provided IP=[%s] parses as a CIDR block, attempting to use [%s] as IP\n", ipStr, ipaddr.String())
-			}
+			return nil, nil, fmt.Errorf("could not parse IP address=[%s] as IP or CIDR, err=[%s]", ipStr, err)
 		}
 	}
-
-	v4addr := ipaddr.To4()
-	if v4addr != nil {
-		// IPv4
-		location := t.ipv4
-		v4Uint32 := binary.BigEndian.Uint32(v4addr)
-
-		//bitmask := uint32(1)
-		for i := uint32(1); ; i++ {
-
-			// Keep Searching
-			thing := v4bit(v4Uint32, i)
-			if thing == 0 {
-				if location.binZero == nil {
-					if location.Value == nil {
-						return nil, nil
-					} else {
-						return location.Value, nil
-					}
-				}
-				location = location.binZero
-			} else {
-				if location.binOne == nil {
-					if location.Value == nil {
-						return nil, nil
-					} else {
-						return location.Value, nil
-					}
-				}
-				location = location.binOne
-			}
-		}
-	} else {
-		// IPv6
-		location := t.ipv6
-		v6 := big.NewInt(0)
-		v6.SetBytes(ipaddr)
-		for i := 1; i <= 128; i++ {
-			thing := v6.Bit(128 - i)
-			if thing == 0 {
-				if location.binZero == nil {
-					if location.Value == nil {
-						return nil, nil
-					} else {
-						return location.Value, nil
-					}
-				}
-				location = location.binZero
-			} else {
-				if location.binOne == nil {
-					if location.Value == nil {
-						return nil, nil
-					} else {
-						return location.Value, nil
-					}
-				}
-				location = location.binOne
-			}
-		}
-	}
-	return nil, fmt.Errorf("no results for search")
+	return t.GetFromIP(ipaddr)
 }
 
-func v4bit(v4 uint32, bitloc uint32) uint {
-	return uint((v4 >> (32 - bitloc)) & 0x01)
+func (t *TreeRoot[T]) GetFromIP(ipaddr net.IP) (UserSuppliedType[T], *net.IPNet, error) {
+	v4addr := ipaddr.To4()
+	if v4addr != nil {
+		return t.getFromIPv4(v4addr)
+	} else {
+		return t.getFromIPv6(ipaddr)
+	}
+}
+
+func (t *TreeRoot[T]) getFromIPv4(ipaddr net.IP) (UserSuppliedType[T], *net.IPNet, error) {
+	var (
+		network net.IPNet
+	)
+
+	location := t.ipv4
+	v4Uint32 := binary.BigEndian.Uint32(ipaddr)
+
+	for i := uint32(1); i < 34; i++ {
+		// Keep Searching
+		thing := v4bit(v4Uint32, i)
+		var next *TreeNode[T]
+		if thing == 0 {
+			next = location.binZero
+		} else {
+			next = location.binOne
+		}
+
+		if next == nil {
+			if location.Value == nil {
+				return nil, nil, nil
+			} else {
+				network.IP = ipaddr
+				network.Mask = net.CIDRMask(int(i-1), 32)
+				return location.Value, &network, nil
+			}
+		}
+		location = next
+	}
+	return nil, nil, fmt.Errorf("no results for search")
+}
+
+func (t *TreeRoot[T]) getFromIPv6(ipaddr net.IP) (UserSuppliedType[T], *net.IPNet, error) {
+	var (
+		network net.IPNet
+	)
+
+	location := t.ipv6
+	v6 := big.NewInt(0)
+	v6.SetBytes(ipaddr)
+
+	for i := 1; i <= 128; i++ {
+		thing := v6.Bit(128 - i)
+		var next *TreeNode[T]
+		if thing == 0 {
+			next = location.binZero
+		} else {
+			next = location.binOne
+		}
+
+		if next == nil {
+			if location.Value == nil {
+				return nil, nil, nil
+			} else {
+				network.IP = ipaddr
+				network.Mask = net.CIDRMask(int(i-1), 128)
+				return location.Value, &network, nil
+			}
+		}
+		location = next
+	}
+	return nil, nil, fmt.Errorf("no results for search")
+}
+
+// v4bit is a simple function to return the n'th bit of the v4 uint32
+func v4bit(v4 uint32, n uint32) uint {
+	return uint((v4 >> (32 - n)) & 0x01)
 }

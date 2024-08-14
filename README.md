@@ -17,12 +17,14 @@ Here's an example:
     }
 
     // Lookup a single IP in that subnet
-    someResult, err := myTree.FindNetFromIP("15.197.148.34")
+    someResult, network, err := myTree.FindNetFromIP("15.197.148.34")
     if err != nil {
         // handle error
     }
 
+    // Result and network result was found in can be used
     fmt.Printf("The result is: %s\n", someResult)
+    fmt.Printf("Found in network: %s\n", network.String())
 ```
 
 With overlapping subnets, the most specific is returned.  e.g. a `/30` which is within a `/24` both being stored as subnets... a search for an address inside the `/30` would return the `/30` not the `/24` as this is the most specific subnet.

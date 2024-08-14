@@ -57,11 +57,12 @@ func TestAddAndRetrieveV4(t *testing.T) {
 	myTree := NewTree[string]()
 
 	moo, err := myTree.AddNet("10.10.10.1/18", "Hello")
-	t.Logf("something: %+v %+v\n", &moo, moo)
 	require.NoError(t, err)
 	require.Equal(t, moo.Value, "Hello")
 
-	resultOne, _ := myTree.FindNetFromIP("10.10.10.3")
+	resultOne, network, _ := myTree.GetFromIPStr("10.10.10.3")
+	netsize, _ := network.Mask.Size()
+	require.Equal(t, 18, netsize)
 	require.NoError(t, err)
 	require.NotNil(t, resultOne)
 	require.Equal(t, "Hello", resultOne)
@@ -75,7 +76,9 @@ func TestAddAndRetrieveV6(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, something.Value, "yo yo yo")
 
-	resultTwo, err := myTree.FindNetFromIP("bd5f:285d:2687:ec0c:0000:0000:0000:0001")
+	resultTwo, network, err := myTree.GetFromIPStr("bd5f:285d:2687:ec0c:0000:0000:0000:0001")
+	netsize, _ := network.Mask.Size()
+	require.Equal(t, 64, netsize)
 	require.NoError(t, err)
 	require.NotNil(t, resultTwo)
 	require.Equal(t, "yo yo yo", resultTwo)
@@ -93,7 +96,9 @@ func TestOverlapV4(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, mooTwo.Value, "Smaller")
 
-	result, err := myTree.FindNetFromIP("192.168.5.34")
+	result, network, err := myTree.GetFromIPStr("192.168.5.34")
+	netsize, _ := network.Mask.Size()
+	require.Equal(t, 24, netsize)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, "Smaller", result)
@@ -112,7 +117,21 @@ func TestNotFoundV4(t *testing.T) {
 	require.Equal(t, mooTwo.Value, "Smaller")
 	require.Equal(t, mooOne.Value, "Larger")
 
-	result, err := myTree.FindNetFromIP("10.10.10.10")
-	require.NoError(t, err)
+	result, network, err := myTree.GetFromIPStr("10.10.10.10")
+	require.Nil(t, network)
 	require.Nil(t, result)
+	require.NoError(t, err)
+}
+
+func TestSingleNodeNetV4(t *testing.T) {
+	// Using the type of string to set hello
+	myTree := NewTree[string]()
+
+	mooOne, err := myTree.AddNet("192.168.1.2/32", "My thing")
+	require.NoError(t, err)
+	require.Equal(t, mooOne.Value, "My thing")
+
+	result, _, err := myTree.GetFromIPStr("192.168.1.2")
+	require.NoError(t, err)
+	require.Equal(t, result, "My thing")
 }
