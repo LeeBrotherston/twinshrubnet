@@ -8,7 +8,18 @@ on:
     branches: [ "main" ]
 
 jobs:
-  - name: Golangci-lint
-    uses: golangci/golangci-lint-action@v6.0.1
-    with:
-      version: latest
+  Test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+
+      - name: Test
+        run: go test -v ./...
+      
+      - name: Golangci-lint
+        uses: golangci/golangci-lint-action@v6.0.1
+        with:
+          version: latest
