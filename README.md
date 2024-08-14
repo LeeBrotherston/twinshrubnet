@@ -1,9 +1,9 @@
 # Binary Tree Subnet Search ... a twin shrubnet search, in GO :)
 ![Build Pass/Fail Badge](https://github.com/LeeBrotherston/twinshrubnet/actions/workflows/go.yml/badge.svg)
 
-Looking up an IP from a list is easy, looking up if an IP in within a subnet is easy. Having a list of subnets and finding which one the IP address belongs to is less easy. This is a simple binary tree search package which makes this pretty easy as subnet masking lends itself really nicely to binary tree search.
+Looking up an IP from a list is easy, looking up if an IP is within a subnet is easy. Having a list of subnets and finding which one the IP address belongs to is less easy. This is a simple binary tree search package which makes this pretty easy, as subnet masking lends itself really nicely to binary tree search.
 
-twinshrubnet uses generics in order to allow user supplied types to be used as values in the loopup and so GO version `1.18` or above is required.
+twinshrubnet uses generics in order to allow user supplied types to be used as values in the lookup and so GO version `1.18` or above is required.
 
 Here's an example:
 
