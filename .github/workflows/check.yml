@@ -1,25 +1,16 @@
-
-name: Go
-
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
+name: check
+on: pull_request
 jobs:
   Test:
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.23'
+    - uses: actions/checkout@v3
+    - uses: actions/setup-go@v4
 
-      - name: Test
-        run: go test -v ./...
+    - name: Test
+      run: go test -v ./...
       
-      - name: Golangci-lint
-        uses: golangci/golangci-lint-action@v6.0.1
-        with:
-          version: latest
+    - name: Golangci-lint
+      uses: golangci/golangci-lint-action@v6.0.1
+      with:
+        version: latest
