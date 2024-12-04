@@ -95,6 +95,84 @@ func (t *TreeRoot[T]) AddNet(cidr string, userdata T) (*TreeNode[T], error) {
 	return location, nil
 }
 
+// RemoveNet removes a network from the tree...  Currently it is not complete,
+// only removing the value rather than the tree entries themselves, but we will
+// add that sortly.  GO's garbage collection should handle freeing up the memory
+// used by the value
+func (t *TreeRoot[T]) RemoveNet(cidr string) error {
+	_, ipnet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return err
+	}
+
+	location, err := t.findNodeFromIPNet(*ipnet)
+	if err != nil {
+		return err
+	}
+
+	location.valuePtr = nil
+	return nil
+}
+
+func (t *TreeRoot[T]) findNodeFromIPNet(network net.IPNet) (*TreeNode[T], error) {
+	var node *TreeNode[T]
+	switch ipVersion(&network) {
+	case 4:
+		node, _ = t.getNodeFromIPv4(network.IP)
+	case 6:
+		node, _ = t.getNodeFromIPv6(network.IP)
+	default:
+		return nil, fmt.Errorf("could not determine IP type")
+	}
+	return node, nil
+}
+
+// getFromIPv4 find the appropriate node given an address
+func (t *TreeRoot[T]) getNodeFromIPv4(ipaddr net.IP) (*TreeNode[T], uint32) {
+	location := t.ipv4
+	v4Uint32 := binary.BigEndian.Uint32(ipaddr)
+
+	for i := uint32(1); i < 34; i++ {
+		// Keep Searching
+		thing := v4bit(v4Uint32, i)
+		var next *TreeNode[T]
+		if thing == 0 {
+			next = location.binZero
+		} else {
+			next = location.binOne
+		}
+
+		if next == nil {
+			// Found it
+			return location, (i - 1)
+		}
+		location = next
+	}
+	return nil, 0
+}
+
+func (t *TreeRoot[T]) getNodeFromIPv6(ipaddr net.IP) (*TreeNode[T], int) {
+	location := t.ipv6
+	v6 := big.NewInt(0)
+	v6.SetBytes(ipaddr)
+
+	for i := 1; i <= 128; i++ {
+		thing := v6.Bit(128 - i)
+		var next *TreeNode[T]
+		if thing == 0 {
+			next = location.binZero
+		} else {
+			next = location.binOne
+		}
+
+		if next == nil {
+			return location, i - 1
+		}
+		location = next
+	}
+	return nil, 0
+}
+
 func (t *TreeRoot[T]) GetFromIPStr(ipStr string) (UserSuppliedType[T], *net.IPNet, error) {
 	var (
 		ipaddr net.IP
@@ -121,67 +199,29 @@ func (t *TreeRoot[T]) GetFromIP(ipaddr net.IP) (UserSuppliedType[T], *net.IPNet,
 }
 
 func (t *TreeRoot[T]) getFromIPv4(ipaddr net.IP) (UserSuppliedType[T], *net.IPNet, error) {
-	var (
-		network net.IPNet
-	)
-
-	location := t.ipv4
-	v4Uint32 := binary.BigEndian.Uint32(ipaddr)
-
-	for i := uint32(1); i < 34; i++ {
-		// Keep Searching
-		thing := v4bit(v4Uint32, i)
-		var next *TreeNode[T]
-		if thing == 0 {
-			next = location.binZero
-		} else {
-			next = location.binOne
-		}
-
-		if next == nil {
-			if location.valuePtr == nil {
-				return nil, nil, nil
-			} else {
-				network.IP = ipaddr
-				network.Mask = net.CIDRMask(int(i-1), 32)
-				return *location.valuePtr, &network, nil
-			}
-		}
-		location = next
+	node, i := t.getNodeFromIPv4(ipaddr)
+	if node == nil || node.valuePtr == nil {
+		return nil, nil, fmt.Errorf("not found")
 	}
-	return nil, nil, fmt.Errorf("no results for search")
+
+	network := new(net.IPNet)
+	network.IP = ipaddr
+	network.Mask = net.CIDRMask(int(i), 32)
+
+	return node.value(), network, nil
 }
 
 func (t *TreeRoot[T]) getFromIPv6(ipaddr net.IP) (UserSuppliedType[T], *net.IPNet, error) {
-	var (
-		network net.IPNet
-	)
-
-	location := t.ipv6
-	v6 := big.NewInt(0)
-	v6.SetBytes(ipaddr)
-
-	for i := 1; i <= 128; i++ {
-		thing := v6.Bit(128 - i)
-		var next *TreeNode[T]
-		if thing == 0 {
-			next = location.binZero
-		} else {
-			next = location.binOne
-		}
-
-		if next == nil {
-			if location.valuePtr == nil {
-				return nil, nil, nil
-			} else {
-				network.IP = ipaddr
-				network.Mask = net.CIDRMask(int(i-1), 128)
-				return *location.valuePtr, &network, nil
-			}
-		}
-		location = next
+	node, i := t.getNodeFromIPv6(ipaddr)
+	if node == nil || node.valuePtr == nil {
+		return nil, nil, fmt.Errorf("not found")
 	}
-	return nil, nil, fmt.Errorf("no results for search")
+
+	network := new(net.IPNet)
+	network.IP = ipaddr
+	network.Mask = net.CIDRMask(int(i), 128)
+
+	return node.value(), network, nil
 }
 
 // v4bit is a simple function to return the n'th bit of the v4 uint32
@@ -189,6 +229,25 @@ func v4bit(v4 uint32, n uint32) uint {
 	return uint((v4 >> (32 - n)) & 0x01)
 }
 
-func (t *TreeNode[T]) Value() UserSuppliedType[T] {
+func (t *TreeNode[T]) value() UserSuppliedType[T] {
+	if t == nil {
+		return nil
+	}
+
+	if t.valuePtr == nil {
+		return nil
+	}
 	return *t.valuePtr
+}
+
+func ipVersion(network *net.IPNet) int {
+	_, bitsize := network.Mask.Size()
+	switch bitsize {
+	case 32:
+		return 4
+	case 128:
+		return 6
+	default:
+		return 0
+	}
 }
