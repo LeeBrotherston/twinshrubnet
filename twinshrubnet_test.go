@@ -40,7 +40,7 @@ func TestAddV4(t *testing.T) {
 
 	moo, err := myTree.AddNet("10.10.10.1/18", "Hello")
 	require.NoError(t, err)
-	require.Equal(t, moo.Value, "Hello")
+	require.Equal(t, moo.Value(), "Hello")
 }
 
 func TestAddV6(t *testing.T) {
@@ -49,7 +49,7 @@ func TestAddV6(t *testing.T) {
 
 	something, err := myTree.AddNet("bd5f:285d:2687:ec0c:0a3b:9f7a:cb63:560b/64", "yo yo yo")
 	require.NoError(t, err)
-	require.Equal(t, something.Value, "yo yo yo")
+	require.Equal(t, something.Value(), "yo yo yo")
 }
 
 func TestAddAndRetrieveV4(t *testing.T) {
@@ -58,14 +58,14 @@ func TestAddAndRetrieveV4(t *testing.T) {
 
 	moo, err := myTree.AddNet("10.10.10.1/18", "Hello")
 	require.NoError(t, err)
-	require.Equal(t, moo.Value, "Hello")
+	require.Equal(t, moo.Value(), "Hello")
 
 	resultOne, network, _ := myTree.GetFromIPStr("10.10.10.3")
 	netsize, _ := network.Mask.Size()
 	require.Equal(t, 18, netsize)
 	require.NoError(t, err)
 	require.NotNil(t, resultOne)
-	require.Equal(t, "Hello", resultOne)
+	require.Equal(t, resultOne, "Hello")
 }
 
 func TestAddAndRetrieveV6(t *testing.T) {
@@ -74,14 +74,14 @@ func TestAddAndRetrieveV6(t *testing.T) {
 
 	something, err := myTree.AddNet("bd5f:285d:2687:ec0c:0a3b:9f7a:cb63:560b/64", "yo yo yo")
 	require.NoError(t, err)
-	require.Equal(t, something.Value, "yo yo yo")
+	require.Equal(t, something.Value(), "yo yo yo")
 
 	resultTwo, network, err := myTree.GetFromIPStr("bd5f:285d:2687:ec0c:0000:0000:0000:0001")
 	netsize, _ := network.Mask.Size()
 	require.Equal(t, 64, netsize)
 	require.NoError(t, err)
 	require.NotNil(t, resultTwo)
-	require.Equal(t, "yo yo yo", resultTwo)
+	require.Equal(t, resultTwo, "yo yo yo")
 }
 
 func TestOverlapV4(t *testing.T) {
@@ -90,11 +90,11 @@ func TestOverlapV4(t *testing.T) {
 
 	mooOne, err := myTree.AddNet("192.168.1.0/16", "Larger")
 	require.NoError(t, err)
-	require.Equal(t, mooOne.Value, "Larger")
+	require.Equal(t, "Larger", mooOne.Value())
 
 	mooTwo, err := myTree.AddNet("192.168.5.0/24", "Smaller")
 	require.NoError(t, err)
-	require.Equal(t, mooTwo.Value, "Smaller")
+	require.Equal(t, "Smaller", mooTwo.Value())
 
 	result, network, err := myTree.GetFromIPStr("192.168.5.34")
 	netsize, _ := network.Mask.Size()
@@ -110,12 +110,12 @@ func TestNotFoundV4(t *testing.T) {
 
 	mooOne, err := myTree.AddNet("192.168.1.0/16", "Larger")
 	require.NoError(t, err)
-	require.Equal(t, mooOne.Value, "Larger")
+	require.Equal(t, "Larger", mooOne.Value())
 
 	mooTwo, err := myTree.AddNet("192.168.5.0/24", "Smaller")
 	require.NoError(t, err)
-	require.Equal(t, mooTwo.Value, "Smaller")
-	require.Equal(t, mooOne.Value, "Larger")
+	require.Equal(t, "Smaller", mooTwo.Value())
+	require.Equal(t, "Larger", mooOne.Value())
 
 	result, network, err := myTree.GetFromIPStr("10.10.10.10")
 	require.Nil(t, network)
@@ -129,9 +129,9 @@ func TestSingleNodeNetV4(t *testing.T) {
 
 	mooOne, err := myTree.AddNet("192.168.1.2/32", "My thing")
 	require.NoError(t, err)
-	require.Equal(t, mooOne.Value, "My thing")
+	require.Equal(t, "My thing", mooOne.Value())
 
 	result, _, err := myTree.GetFromIPStr("192.168.1.2")
 	require.NoError(t, err)
-	require.Equal(t, result, "My thing")
+	require.Equal(t, "My thing", result)
 }

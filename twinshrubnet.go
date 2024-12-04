@@ -12,9 +12,9 @@ type UserSuppliedType[T any] any
 
 // TreeNode is a node in the binary search tree
 type TreeNode[T any] struct {
-	binZero *TreeNode[T]
-	binOne  *TreeNode[T]
-	Value   UserSuppliedType[T]
+	binZero  *TreeNode[T]
+	binOne   *TreeNode[T]
+	valuePtr *UserSuppliedType[T]
 }
 
 // TreeRoot is the root of the binary search tree
@@ -62,7 +62,9 @@ func (t *TreeRoot[T]) AddNet(cidr string, userdata T) (*TreeNode[T], error) {
 			}
 		}
 
-		location.Value = userdata
+		location.valuePtr = new(UserSuppliedType[T])
+		*location.valuePtr = userdata
+
 		return location, nil
 
 	} else if bitsize == 128 {
@@ -87,7 +89,9 @@ func (t *TreeRoot[T]) AddNet(cidr string, userdata T) (*TreeNode[T], error) {
 		}
 	}
 
-	location.Value = userdata
+	location.valuePtr = new(UserSuppliedType[T])
+	*location.valuePtr = userdata
+
 	return location, nil
 }
 
@@ -135,12 +139,12 @@ func (t *TreeRoot[T]) getFromIPv4(ipaddr net.IP) (UserSuppliedType[T], *net.IPNe
 		}
 
 		if next == nil {
-			if location.Value == nil {
+			if location.valuePtr == nil {
 				return nil, nil, nil
 			} else {
 				network.IP = ipaddr
 				network.Mask = net.CIDRMask(int(i-1), 32)
-				return location.Value, &network, nil
+				return *location.valuePtr, &network, nil
 			}
 		}
 		location = next
@@ -167,12 +171,12 @@ func (t *TreeRoot[T]) getFromIPv6(ipaddr net.IP) (UserSuppliedType[T], *net.IPNe
 		}
 
 		if next == nil {
-			if location.Value == nil {
+			if location.valuePtr == nil {
 				return nil, nil, nil
 			} else {
 				network.IP = ipaddr
 				network.Mask = net.CIDRMask(int(i-1), 128)
-				return location.Value, &network, nil
+				return *location.valuePtr, &network, nil
 			}
 		}
 		location = next
@@ -183,4 +187,8 @@ func (t *TreeRoot[T]) getFromIPv6(ipaddr net.IP) (UserSuppliedType[T], *net.IPNe
 // v4bit is a simple function to return the n'th bit of the v4 uint32
 func v4bit(v4 uint32, n uint32) uint {
 	return uint((v4 >> (32 - n)) & 0x01)
+}
+
+func (t *TreeNode[T]) Value() UserSuppliedType[T] {
+	return *t.valuePtr
 }
