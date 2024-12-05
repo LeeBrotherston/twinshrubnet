@@ -6,6 +6,7 @@ import (
 	"log"
 	"math/big"
 	"net"
+	"sync"
 )
 
 type UserSuppliedType[T any] any
@@ -21,6 +22,7 @@ type TreeNode[T any] struct {
 type TreeRoot[T any] struct {
 	ipv4 *TreeNode[T]
 	ipv6 *TreeNode[T]
+	lock *sync.RWMutex
 }
 
 // NewTree returns the root of a new twinshrubnet tree
@@ -28,11 +30,15 @@ func NewTree[T any]() *TreeRoot[T] {
 	return &TreeRoot[T]{
 		ipv4: &TreeNode[T]{},
 		ipv6: &TreeNode[T]{},
+		lock: new(sync.RWMutex),
 	}
 }
 
 // AddNet add's a network to the tree, returning a pointer to the node representing that network (or error)
 func (t *TreeRoot[T]) AddNet(cidr string, userdata T) (*TreeNode[T], error) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	var location *TreeNode[T]
 	_, ipnet, err := net.ParseCIDR(cidr)
 	if err != nil {
@@ -100,6 +106,9 @@ func (t *TreeRoot[T]) AddNet(cidr string, userdata T) (*TreeNode[T], error) {
 // add that sortly.  GO's garbage collection should handle freeing up the memory
 // used by the value
 func (t *TreeRoot[T]) RemoveNet(cidr string) error {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	_, ipnet, err := net.ParseCIDR(cidr)
 	if err != nil {
 		return err
@@ -174,6 +183,9 @@ func (t *TreeRoot[T]) getNodeFromIPv6(ipaddr net.IP) (*TreeNode[T], int) {
 }
 
 func (t *TreeRoot[T]) GetFromIPStr(ipStr string) (UserSuppliedType[T], *net.IPNet, error) {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
 	var (
 		ipaddr net.IP
 		err    error
@@ -190,6 +202,9 @@ func (t *TreeRoot[T]) GetFromIPStr(ipStr string) (UserSuppliedType[T], *net.IPNe
 }
 
 func (t *TreeRoot[T]) GetFromIP(ipaddr net.IP) (UserSuppliedType[T], *net.IPNet, error) {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
 	v4addr := ipaddr.To4()
 	if v4addr != nil {
 		return t.getFromIPv4(v4addr)
