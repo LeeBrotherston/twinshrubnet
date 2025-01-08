@@ -8,7 +8,7 @@ twinshrubnet uses generics in order to allow user supplied types to be used as v
 
 Here's an example:
 
-```golang
+```go
     // initialize the tree using type string as the value stored for this subnet
     myTree := twinshrubnet.NewTree[string]()
 
