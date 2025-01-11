@@ -1,15 +1,8 @@
 # Binary Tree Subnet Search ... a twin shrubnet search, in GO :)
-<<<<<<< HEAD
 ![Build Status](https://github.com/LeeBrotherston/twinshrubnet/actions/workflows/go.yml/badge.svg)
 ![Security Status](https://github.com/LeeBrotherston/twinshrubnet/actions/workflows/security.yml/badge.svg)
 ![Code Coverage](https://codecov.io/gh/LeeBrotherston/twinshrubnet/branch/main/graph/badge.svg)
 ![Linting Status](https://github.com/LeeBrotherston/twinshrubnet/actions/workflows/golangci-lint.yml/badge.svg)
-||||||| da45fa9
-![Build Pass/Fail Badge](https://github.com/LeeBrotherston/twinshrubnet/actions/workflows/go.yml/badge.svg)
-=======
-![Build Pass/Fail Badge](https://github.com/LeeBrotherston/twinshrubnet/actions/workflows/go.yml/badge.svg)
-[![CodeQL](https://github.com/LeeBrotherston/twinshrubnet/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/LeeBrotherston/twinshrubnet/actions/workflows/github-code-scanning/codeql)
->>>>>>> main
 
 Looking up an IP from a list is easy, looking up if an IP is within a subnet is easy. Having a list of subnets and finding which one the IP address belongs to is less easy. This is a simple binary tree search package which makes this pretty easy, as subnet masking lends itself really nicely to binary tree search.
 
