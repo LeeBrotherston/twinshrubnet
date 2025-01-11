@@ -68,9 +68,18 @@ func (v4 ipv4Bits) getBit(position int) uint {
 	if position < 1 || position > 32 {
 		return 0
 	}
-	// Safe conversion after bounds check
-	shift := uint(32 - position)
-	return uint((v4.addr >> shift) & 0x01)
+
+	// Use uint32 for all arithmetic to avoid overflow
+	pos := uint32(position)
+	if pos > 32 {
+		return 0
+	}
+
+	// Calculate shift using uint32
+	shift := uint32(32) - pos
+
+	// Perform bit operation using uint32 and only convert final result
+	return uint((v4.addr >> shift) & uint32(1))
 }
 
 func (v4 ipv4Bits) getBitSize() int {
