@@ -22,12 +22,10 @@ jobs:
         go-version: '1.23'
 
     - name: Test
-      run: go test -v ./...
+      run: go test -race -v ./...
 
     - name: Golangci-lint
       uses: golangci/golangci-lint-action@v6.1.1
 
     - name: TruffleHog OSS
       uses: trufflesecurity/trufflehog@v3.84.2
-  
-  
