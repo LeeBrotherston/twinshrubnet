@@ -64,9 +64,13 @@ type ipv4Bits struct {
 }
 
 func (v4 ipv4Bits) getBit(position int) uint {
-	// Fix bit position calculation to match test expectations
-	// For 192.168.1.1, the first bit should be 1 (192 starts with 11000000)
-	return uint((v4.addr >> (32 - uint(position))) & 0x01)
+	// Ensure position is within valid range (1-32)
+	if position < 1 || position > 32 {
+		return 0
+	}
+	// Safe conversion after bounds check
+	shift := uint(32 - position)
+	return uint((v4.addr >> shift) & 0x01)
 }
 
 func (v4 ipv4Bits) getBitSize() int {
