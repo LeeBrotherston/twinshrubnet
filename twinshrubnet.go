@@ -21,9 +21,9 @@ type UserSuppliedType[T any] any
 
 // TreeNode is a node in the binary search tree
 type TreeNode[T any] struct {
-	binZero *TreeNode[T]
-	binOne  *TreeNode[T]
-	Value   UserSuppliedType[T]
+	binZero  *TreeNode[T]
+	binOne   *TreeNode[T]
+	valuePtr *UserSuppliedType[T]
 }
 
 // treeSection represents a versioned tree (IPv4 or IPv6)
@@ -153,7 +153,9 @@ func (t *TreeRoot[T]) AddNet(cidr string, userdata T) (*TreeNode[T], error) {
 		return nil, err
 	}
 
-	location.Value = userdata
+	location.valuePtr = new(UserSuppliedType[T])
+	*location.valuePtr = userdata
+
 	return location, nil
 }
 
@@ -198,30 +200,135 @@ func (t *TreeRoot[T]) GetFromIPStr(ipStr string) (UserSuppliedType[T], *net.IPNe
 }
 
 func (t *TreeRoot[T]) getFromIPv4(ipaddr net.IP) (UserSuppliedType[T], *net.IPNet, error) {
-	node, net, err := t.getFromIPv4Raw(ipaddr)
-	if node == nil {
-		return nil, net, err
-	}
-	return node.Value, net, err
-
-}
-
-func (t *TreeRoot[T]) getFromIPv6(ipaddr net.IP) (UserSuppliedType[T], *net.IPNet, error) {
-	node, net, err := t.getFromIPv6Raw(ipaddr)
-	if node == nil {
-		return nil, net, err
-	}
-	return node.Value, net, err
-}
-
-func (t *TreeRoot[T]) getFromIPv4Raw(ipaddr net.IP) (*TreeNode[T], *net.IPNet, error) {
 	if len(ipaddr) != net.IPv4len {
 		return nil, nil, ErrInvalidIP
 	}
 
-	var network net.IPNet
 	location := t.ipv4.root
+	v4Uint32 := binary.BigEndian.Uint32(ipaddr)
+	var i uint32
 
+	for i = 1; i < 34; i++ {
+		thing := v4bit(v4Uint32, i)
+		var next *TreeNode[T]
+		if thing == 0 {
+			next = location.binZero
+		} else {
+			next = location.binOne
+		}
+
+		if next == nil {
+			if location.valuePtr == nil {
+				return nil, nil, ErrNoMatch
+			}
+			network := &net.IPNet{
+				IP:   ipaddr,
+				Mask: net.CIDRMask(int(i-1), 32),
+			}
+			return location.value(), network, nil
+		}
+		location = next
+	}
+
+	if location.valuePtr == nil {
+		return nil, nil, ErrNoMatch
+	}
+	network := &net.IPNet{
+		IP:   ipaddr,
+		Mask: net.CIDRMask(int(i-1), 32),
+	}
+	return location.value(), network, nil
+}
+
+func (t *TreeRoot[T]) getFromIPv6(ipaddr net.IP) (UserSuppliedType[T], *net.IPNet, error) {
+	if len(ipaddr) != net.IPv6len {
+		return nil, nil, ErrInvalidIP
+	}
+
+	location := t.ipv6.root
+	v6 := big.NewInt(0)
+	v6.SetBytes(ipaddr)
+	var i int
+
+	for i = 1; i <= 128; i++ {
+		thing := v6.Bit(128 - i)
+		var next *TreeNode[T]
+		if thing == 0 {
+			next = location.binZero
+		} else {
+			next = location.binOne
+		}
+
+		if next == nil {
+			if location.valuePtr == nil {
+				return nil, nil, ErrNoMatch
+			}
+			network := &net.IPNet{
+				IP:   ipaddr,
+				Mask: net.CIDRMask(i-1, 128),
+			}
+			return location.value(), network, nil
+		}
+		location = next
+	}
+
+	if location.valuePtr == nil {
+		return nil, nil, ErrNoMatch
+	}
+	network := &net.IPNet{
+		IP:   ipaddr,
+		Mask: net.CIDRMask(i-1, 128),
+	}
+	return location.value(), network, nil
+}
+
+// Removed getFromIPv4Raw and getFromIPv6Raw as they're no longer needed
+
+// RemoveNet removes a network from the tree
+func (t *TreeRoot[T]) RemoveNet(cidr string) error {
+	_, ipnet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return err
+	}
+
+	var section *treeSection[T]
+	switch ipVersion(ipnet) {
+	case 4:
+		section = t.ipv4
+	case 6:
+		section = t.ipv6
+	default:
+		return ErrInvalidIP
+	}
+
+	section.lock.Lock()
+	defer section.lock.Unlock()
+
+	node, err := t.findNodeFromIPNet(*ipnet)
+	if err != nil {
+		return err
+	}
+
+	node.valuePtr = nil
+	return nil
+}
+
+func (t *TreeRoot[T]) findNodeFromIPNet(network net.IPNet) (*TreeNode[T], error) {
+	var node *TreeNode[T]
+	switch ipVersion(&network) {
+	case 4:
+		node, _ = t.getNodeFromIPv4(network.IP)
+	case 6:
+		node, _ = t.getNodeFromIPv6(network.IP)
+	default:
+		return nil, fmt.Errorf("could not determine IP type")
+	}
+	return node, nil
+}
+
+// getFromIPv4 find the appropriate node given an address
+func (t *TreeRoot[T]) getNodeFromIPv4(ipaddr net.IP) (*TreeNode[T], uint32) {
+	location := t.ipv4.root
 	v4Uint32 := binary.BigEndian.Uint32(ipaddr)
 
 	for i := uint32(1); i < 34; i++ {
@@ -235,27 +342,16 @@ func (t *TreeRoot[T]) getFromIPv4Raw(ipaddr net.IP) (*TreeNode[T], *net.IPNet, e
 		}
 
 		if next == nil {
-			if location.Value == nil {
-				return nil, nil, nil
-			} else {
-				network.IP = ipaddr
-				network.Mask = net.CIDRMask(int(i-1), 32)
-				return location, &network, nil
-			}
+			// Found it
+			return location, (i - 1)
 		}
 		location = next
 	}
-	return nil, nil, fmt.Errorf("no results for search")
+	return nil, 0
 }
 
-func (t *TreeRoot[T]) getFromIPv6Raw(ipaddr net.IP) (*TreeNode[T], *net.IPNet, error) {
-	if len(ipaddr) != net.IPv6len {
-		return nil, nil, ErrInvalidIP
-	}
-
-	var network net.IPNet
+func (t *TreeRoot[T]) getNodeFromIPv6(ipaddr net.IP) (*TreeNode[T], int) {
 	location := t.ipv6.root
-
 	v6 := big.NewInt(0)
 	v6.SetBytes(ipaddr)
 
@@ -269,20 +365,37 @@ func (t *TreeRoot[T]) getFromIPv6Raw(ipaddr net.IP) (*TreeNode[T], *net.IPNet, e
 		}
 
 		if next == nil {
-			if location.Value == nil {
-				return nil, nil, nil
-			} else {
-				network.IP = ipaddr
-				network.Mask = net.CIDRMask(int(i-1), 128)
-				return location, &network, nil
-			}
+			return location, i - 1
 		}
 		location = next
 	}
-	return nil, nil, fmt.Errorf("no results for search")
+	return nil, 0
 }
 
 // v4bit is a simple function to return the n'th bit of the v4 uint32
 func v4bit(v4 uint32, n uint32) uint {
 	return uint((v4 >> (32 - n)) & 0x01)
+}
+
+func (t *TreeNode[T]) value() UserSuppliedType[T] {
+	if t == nil {
+		return nil
+	}
+
+	if t.valuePtr == nil {
+		return nil
+	}
+	return *t.valuePtr
+}
+
+func ipVersion(network *net.IPNet) int {
+	_, bitsize := network.Mask.Size()
+	switch bitsize {
+	case 32:
+		return 4
+	case 128:
+		return 6
+	default:
+		return 0
+	}
 }
