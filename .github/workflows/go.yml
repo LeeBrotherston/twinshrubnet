@@ -22,7 +22,16 @@ jobs:
         go-version: '1.23'
 
     - name: Test
-      run: go test -race -v ./...
+      run: |
+        go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        go tool cover -func=coverage.txt
+
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: coverage.txt
+        if-no-files-found: error
 
     - name: Golangci-lint
       uses: golangci/golangci-lint-action@v6.1.1
