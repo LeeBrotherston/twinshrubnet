@@ -385,6 +385,7 @@ func (t *TreeRoot[T]) getNodeFromIPv6(ipaddr net.IP) (*TreeNode[T], int) {
 	return nil, 0
 }
 
+
 // v4bit is a simple function to return the n'th bit of the v4 uint32
 func v4bit(v4 uint32, n uint32) uint {
 	return uint((v4 >> (32 - n)) & 0x01)
