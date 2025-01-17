@@ -34,7 +34,7 @@ jobs:
         filename: coverage.json
         label: coverage
         message: ${{ env.COVERAGE }}%
-        valColorRange: ${{ env.COVERAGE }}
+        valColorRange: '0:0:red, 60:60:yellow, 80:80:green'
         maxColorRange: 100
         minColorRange: 0
 
