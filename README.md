@@ -4,6 +4,7 @@
 [![CodeQL](https://github.com/LeeBrotherston/twinshrubnet/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/LeeBrotherston/twinshrubnet/actions/workflows/github-code-scanning/codeql)
 ![Test Coverage](https://github.com/LeeBrotherston/twinshrubnet/actions/workflows/coverage.yml/badge.svg)
 ![Linting Status](https://github.com/LeeBrotherston/twinshrubnet/actions/workflows/golangci-lint.yml/badge.svg)
+
 Looking up an IP from a list is easy, looking up if an IP is within a subnet is easy. Having a list of subnets and finding which one the IP address belongs to is less easy. This is a simple binary tree search package which makes this pretty easy, as subnet masking lends itself really nicely to binary tree search.
 
 twinshrubnet uses generics in order to allow user supplied types to be used as values in the lookup and so GO version `1.18` or above is required.
@@ -32,3 +33,11 @@ Here's an example:
 ```
 
 With overlapping subnets, the most specific is returned.  e.g. a `/30` which is within a `/24` both being stored as subnets... a search for an address inside the `/30` would return the `/30` not the `/24` as this is the most specific subnet.
+
+## Error Handling
+
+The package defines several error constants that can be used to handle specific error conditions:
+
+- `ErrInvalidIP`: Returned when an invalid IP address is provided
+- `ErrNoMatch`: Returned when no matching network is found
+- `ErrInvalidCIDR`: Returned when the CIDR notation is invalid

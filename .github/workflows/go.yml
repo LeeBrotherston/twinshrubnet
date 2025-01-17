@@ -22,12 +22,31 @@ jobs:
         go-version: '1.23'
 
     - name: Test
-      run: go test -v ./...
+      run: |
+        go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        echo "COVERAGE=$(go tool cover -func=coverage.txt | grep total | grep -Eo '[0-9]+\.[0-9]+')" >> $GITHUB_ENV
+
+    - name: Update Coverage Badge
+      uses: schneegans/dynamic-badges-action@v1.7.0
+      with:
+        auth: ${{ secrets.GIST_SECRET }}
+        gistID: 0b88dea0e941cb4e21241d03dcce1ffc
+        filename: coverage.json
+        label: coverage
+        message: ${{ env.COVERAGE }}%
+        valColorRange: ${{ env.COVERAGE }}
+        maxColorRange: 100
+        minColorRange: 0
+
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: coverage.txt
+        if-no-files-found: error
 
     - name: Golangci-lint
       uses: golangci/golangci-lint-action@v6.1.1
 
     - name: TruffleHog OSS
       uses: trufflesecurity/trufflehog@v3.84.2
-  
-  
