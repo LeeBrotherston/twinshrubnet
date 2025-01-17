@@ -192,7 +192,7 @@ func (t *TreeRoot[T]) GetFromIPStr(ipStr string) (UserSuppliedType[T], *net.IPNe
 	)
 	ipaddr = net.ParseIP(ipStr)
 	if ipaddr == nil {
-		log.Printf("could not parse IP address=[%s], attempting to parse as CIDR\n", ipaddr)
+		log.Printf("could not parse IP address=[%s], attempting to parse as CIDR\n", ipStr)
 		ipaddr, _, err = net.ParseCIDR(ipStr)
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not parse IP address=[%s] as IP or CIDR, err=[%s]", ipStr, err)
