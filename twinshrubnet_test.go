@@ -211,6 +211,15 @@ func TestBitGetters(t *testing.T) {
 	require.Equal(t, uint(0), v6.getBit(4)) // Fourth bit (0)
 }
 
+func TestInterface(t *testing.T) {
+	var myTree LookupTree
+	ass := NewTree[string]()
+	myTree = &TreeWrapper{
+		Root: ass,
+	}
+}
+
+// TODO: make this a proper concurrent test rather than just a bunch of goroutines
 func TestConcurrentAccess(t *testing.T) {
 	myTree := NewTree[string]()
 	const goroutines = 100

@@ -16,6 +16,17 @@ var (
 	ErrInvalidCIDR = fmt.Errorf("invalid CIDR notation")
 )
 
+type TreeWrapper struct {
+	Root TreeRoot[any]
+}
+
+type LookupTree interface {
+	AddNet(cidr string, userdata any) (*TreeNode[any], error)
+	GetFromIP(ipaddr net.IP) (UserSuppliedType[any], *net.IPNet, error)
+	GetFromIPStr(ipaddr string) (UserSuppliedType[any], *net.IPNet, error)
+	RemoveNet(cidr string) error
+}
+
 // UserSuppliedType represents any type that can be stored in the tree
 type UserSuppliedType[T any] any
 
@@ -26,33 +37,37 @@ type TreeNode[T any] struct {
 	valuePtr *UserSuppliedType[T]
 }
 
-// treeSection represents a versioned tree (IPv4 or IPv6)
-type treeSection[T any] struct {
+// treePartition represents partition from the root of the tree. In this case
+// ipv4 and ipv6 as we wish to keep them separate
+type treePartition[T any] struct {
 	root *TreeNode[T]
 	lock *sync.RWMutex
 }
 
-// TreeRoot represents the root of the binary search tree containing both IPv4 and IPv6 trees
+// TreeRoot represents the root of the binary search tree containing each
+// partition
 type TreeRoot[T any] struct {
-	ipv4 *treeSection[T]
-	ipv6 *treeSection[T]
+	ipv4 *treePartition[T]
+	ipv6 *treePartition[T]
 }
 
-// NewTree returns the root of a new twinshrubnet tree
+// NewTree returns the root of a new twinshrubnet tree, populated with an ipv4
+// and ipv6 partition
 func NewTree[T any]() *TreeRoot[T] {
 	return &TreeRoot[T]{
-		ipv4: &treeSection[T]{
+		ipv4: &treePartition[T]{
 			root: &TreeNode[T]{},
 			lock: new(sync.RWMutex),
 		},
-		ipv6: &treeSection[T]{
+		ipv6: &treePartition[T]{
 			root: &TreeNode[T]{},
 			lock: new(sync.RWMutex),
 		},
 	}
 }
 
-// bitGetter interface abstracts IPv4/IPv6 bit operations
+// bitGetter interface abstracts IPv4/IPv6 bit operations to make code easier
+// elsewhere
 type bitGetter interface {
 	getBit(position int) uint
 	getBitSize() int
@@ -63,6 +78,12 @@ type ipv4Bits struct {
 	addr uint32
 }
 
+// ipv6Bits wraps big.Int for bit operations
+type ipv6Bits struct {
+	addr *big.Int
+}
+
+// getBit get the bit in the supplied position in an ipv4 address
 func (v4 ipv4Bits) getBit(position int) uint {
 	// Ensure position is within valid range (1-32)
 	if position < 1 || position > 32 {
@@ -82,17 +103,13 @@ func (v4 ipv4Bits) getBit(position int) uint {
 	return uint((v4.addr >> shift) & uint32(1))
 }
 
-func (v4 ipv4Bits) getBitSize() int {
-	return 32
-}
-
-// ipv6Bits wraps big.Int for bit operations
-type ipv6Bits struct {
-	addr *big.Int
-}
-
+// getBit get the bit in the supplied position in an ipv6 address
 func (v6 ipv6Bits) getBit(position int) uint {
 	return uint(v6.addr.Bit(128 - position))
+}
+
+func (v4 ipv4Bits) getBitSize() int {
+	return 32
 }
 
 func (v6 ipv6Bits) getBitSize() int {
@@ -113,6 +130,7 @@ func createNode[T any](parent *TreeNode[T], isOne bool) *TreeNode[T] {
 // traverseTree handles the common tree traversal logic
 func traverseTree[T any](root *TreeNode[T], bits bitGetter, maskOnes int) (*TreeNode[T], error) {
 	location := root
+
 	for i := 1; i <= maskOnes; i++ {
 		bit := bits.getBit(i)
 		var next *TreeNode[T]
@@ -142,15 +160,15 @@ func (t *TreeRoot[T]) AddNet(cidr string, userdata T) (*TreeNode[T], error) {
 	}
 
 	maskOnes, bitsize := ipnet.Mask.Size()
-	var section *treeSection[T]
+	var partition *treePartition[T]
 	var bits bitGetter
 
 	switch bitsize {
 	case 32:
-		section = t.ipv4
+		partition = t.ipv4
 		bits = ipv4Bits{addr: binary.BigEndian.Uint32(ipnet.IP)}
 	case 128:
-		section = t.ipv6
+		partition = t.ipv6
 		v6 := big.NewInt(0)
 		v6.SetBytes(ipnet.IP)
 		bits = ipv6Bits{addr: v6}
@@ -158,10 +176,10 @@ func (t *TreeRoot[T]) AddNet(cidr string, userdata T) (*TreeNode[T], error) {
 		return nil, ErrInvalidIP
 	}
 
-	section.lock.Lock()
-	defer section.lock.Unlock()
+	partition.lock.Lock()
+	defer partition.lock.Unlock()
 
-	location, err := traverseTree(section.root, bits, maskOnes)
+	location, err := traverseTree(partition.root, bits, maskOnes)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +190,8 @@ func (t *TreeRoot[T]) AddNet(cidr string, userdata T) (*TreeNode[T], error) {
 	return location, nil
 }
 
-// GetFromIP looks up an IP address from its net.IP representation
+// GetFromIP looks up an IP address from its net.IP representation. This is safe
+// for use in concurrent functions
 func (t *TreeRoot[T]) GetFromIP(ipaddr net.IP) (UserSuppliedType[T], *net.IPNet, error) {
 	if ipaddr == nil {
 		return nil, nil, ErrInvalidIP
@@ -180,18 +199,14 @@ func (t *TreeRoot[T]) GetFromIP(ipaddr net.IP) (UserSuppliedType[T], *net.IPNet,
 
 	v4addr := ipaddr.To4()
 	if v4addr != nil {
-		t.ipv4.lock.RLock()
-		defer t.ipv4.lock.RUnlock()
 		return t.getFromIPv4(v4addr)
 	} else {
-		t.ipv6.lock.RLock()
-		defer t.ipv6.lock.RUnlock()
 		return t.getFromIPv6(ipaddr)
 	}
 }
 
-// GetFromIPStr looks up an IP address from its string representation.
-// This method is safe for concurrent use with other methods.
+// GetFromIPStr looks up an IP address from its string representation.  This is
+// safe for use in concurrent functions
 func (t *TreeRoot[T]) GetFromIPStr(ipStr string) (UserSuppliedType[T], *net.IPNet, error) {
 	if ipStr == "" {
 		return nil, nil, ErrInvalidIP
@@ -212,10 +227,16 @@ func (t *TreeRoot[T]) GetFromIPStr(ipStr string) (UserSuppliedType[T], *net.IPNe
 	return t.GetFromIP(ipaddr)
 }
 
+// getFromIPv4 is the ipv4 specific search function
 func (t *TreeRoot[T]) getFromIPv4(ipaddr net.IP) (UserSuppliedType[T], *net.IPNet, error) {
 	if len(ipaddr) != net.IPv4len {
 		return nil, nil, ErrInvalidIP
 	}
+
+	// Ensure we have a read lock so that we don't traverse a tree that's being
+	// modified
+	t.ipv4.lock.RLock()
+	defer t.ipv4.lock.RUnlock()
 
 	location := t.ipv4.root
 	v4Uint32 := binary.BigEndian.Uint32(ipaddr)
@@ -253,10 +274,16 @@ func (t *TreeRoot[T]) getFromIPv4(ipaddr net.IP) (UserSuppliedType[T], *net.IPNe
 	return location.value(), network, nil
 }
 
+// getFromIPv6 is the ipv4 specific search function
 func (t *TreeRoot[T]) getFromIPv6(ipaddr net.IP) (UserSuppliedType[T], *net.IPNet, error) {
 	if len(ipaddr) != net.IPv6len {
 		return nil, nil, ErrInvalidIP
 	}
+
+	// Ensure we have a read lock so that we don't traverse a tree that's being
+	// modified
+	t.ipv6.lock.RLock()
+	defer t.ipv6.lock.RUnlock()
 
 	location := t.ipv6.root
 	v6 := big.NewInt(0)
@@ -304,25 +331,27 @@ func (t *TreeRoot[T]) RemoveNet(cidr string) error {
 		return err
 	}
 
-	var section *treeSection[T]
+	var partition *treePartition[T]
 	switch ipVersion(ipnet) {
 	case 4:
-		section = t.ipv4
+		partition = t.ipv4
 	case 6:
-		section = t.ipv6
+		partition = t.ipv6
 	default:
 		return ErrInvalidIP
 	}
 
-	section.lock.Lock()
-	defer section.lock.Unlock()
+	// We don't need to lock partitions, because findNodeFromIPNet already does
+	// this
 
 	node, err := t.findNodeFromIPNet(*ipnet)
 	if err != nil {
 		return err
 	}
 
+	partition.lock.Lock()
 	node.valuePtr = nil
+	partition.lock.Unlock()
 	return nil
 }
 
@@ -343,6 +372,9 @@ func (t *TreeRoot[T]) findNodeFromIPNet(network net.IPNet) (*TreeNode[T], error)
 func (t *TreeRoot[T]) getNodeFromIPv4(ipaddr net.IP) (*TreeNode[T], uint32) {
 	location := t.ipv4.root
 	v4Uint32 := binary.BigEndian.Uint32(ipaddr)
+
+	t.ipv4.lock.RLock()
+	defer t.ipv4.lock.RUnlock()
 
 	for i := uint32(1); i < 34; i++ {
 		// Keep Searching
@@ -368,6 +400,9 @@ func (t *TreeRoot[T]) getNodeFromIPv6(ipaddr net.IP) (*TreeNode[T], int) {
 	v6 := big.NewInt(0)
 	v6.SetBytes(ipaddr)
 
+	t.ipv6.lock.RLock()
+	defer t.ipv6.lock.RUnlock()
+
 	for i := 1; i <= 128; i++ {
 		thing := v6.Bit(128 - i)
 		var next *TreeNode[T]
@@ -384,7 +419,6 @@ func (t *TreeRoot[T]) getNodeFromIPv6(ipaddr net.IP) (*TreeNode[T], int) {
 	}
 	return nil, 0
 }
-
 
 // v4bit is a simple function to return the n'th bit of the v4 uint32
 func v4bit(v4 uint32, n uint32) uint {
